@@ -1,0 +1,431 @@
+version: 1
+
+default_runtime: vulkan
+
+# Runtime registry. Current project scope: one NVIDIA GPU, index 0, no model splitting.
+runtimes:
+  vulkan:
+    executable: runtimes/llama-vulkan-b11026/llama-cli.exe
+    version: 0.4.1-dev
+    build: 11026
+    backend: Vulkan
+    vendor: NVIDIA
+    gpu_indices: [0]
+    devices: [Vulkan0]
+    split_mode: none
+    cpu_only_allowed: false
+    load_mode: mmap
+  cuda:
+    executable: runtimes/llama-cuda-b11073/llama-cli.exe
+    version: 0.4.1-dev
+    build: 11073
+    backend: CUDA
+    vendor: NVIDIA
+    gpu_indices: [0]
+    devices: [CUDA0]
+    split_mode: none
+    cpu_only_allowed: false
+    load_mode: mmap
+
+models:
+  - id: qwen25-coder7b
+    name: Qwen2.5-Coder-7B-Instruct-Q4_K_M
+    path: models/Qwen2.5-Coder-7B-Instruct-GGUF/qwen2.5-coder-7b-instruct-q4_k_m.gguf
+    quantization: Q4_K_M
+    default_profile: controlled-quality-8k
+
+  - id: qwen35-q2k
+    name: Qwen3.5-9B-Coder-Q2_K
+    path: models/Qwen3.5-9B-Coder-Q2_K/Qwen3.5-9B-Coder.Q2_K.gguf
+    quantization: Q2_K
+    status: incompatible-inconsistent
+    default_profile: qwen35-q2k-hello-working
+    compatibility:
+      coding: unsupported
+      conversational: limited
+      reason: Reasoning/template leakage, zero-token runs, repetition loops, and invalid or incomplete coding output under the installed Vulkan runtime.
+
+  - id: qwen35-q3km
+    name: Qwen3.5-9B-Coder-Q3_K_M
+    path: models/Qwen3.5-9B-Coder-Q3_K_M/Qwen3.5-9B-Coder.Q3_K_M.gguf
+    quantization: Q3_K_M
+    default_profile: controlled-quality-8k
+
+  - id: qwen35-iq4xs
+    name: Qwen3.5-9B-Coder-IQ4_XS
+    path: models/Qwen3.5-9B-Coder-IQ4_XS/Qwen3.5-9B-Coder.IQ4_XS.gguf
+    quantization: IQ4_XS
+    default_profile: controlled-quality-8k
+
+# These values are fixed for comparable runs unless a profile overrides them.
+common_parameters:
+  context:
+    flag: -c
+    # values: [1024, 2048, 4096, 8192, 16384, 32768, 65536, 98304, 131072, 196608, 262144]
+    values: [32768, 65536, 98304, 131072, 196608, 262144]
+    min: 1
+    max: 262144
+  output_tokens:
+    flag: -n
+    min: 1
+    max: 32768
+  temperature:
+    flag: --temp
+    value: 0.2
+    min: 0.0
+    max: 2.0
+  top_p:
+    flag: --top-p
+    value: 0.95
+    min: 0.0
+    max: 1.0
+  seed:
+    flag: --seed
+    value: 42
+    min: -1
+  single_turn:
+    flag: --single-turn
+    value: true
+  simple_io:
+    flag: --simple-io
+    value: true
+  color:
+    flag: --color
+    value: "off"
+    values: ["on", "off"]
+  reasoning:
+    flag: --reasoning
+    value: auto
+    values: [auto, "on", "off"]
+  reasoning_budget:
+    flag: --reasoning-budget
+    value: 4096
+    min: -1
+  prompt_encoding: utf-8
+
+# Architecture-only sweep defaults. These do not change the normal comparison settings above.
+architecture_defaults:
+  backends: [Vulkan, CUDA]
+  gpu_layers: [1, 5, 10, 15, 20, 30, 99]
+  output_tokens: 256
+  repeats: 2
+
+profiles:
+  controlled-quality-8k:
+    purpose: Comparable coding-quality run with a normal output budget.
+    runtime: vulkan
+    parameters:
+      gpu_layers: 10
+      output_tokens: 8192
+      reasoning: auto
+      reasoning_budget: 4096
+      load_mode: mmap
+
+  controlled-quality-16k:
+    purpose: Comparable coding-quality run with an extended output budget.
+    runtime: vulkan
+    parameters:
+      gpu_layers: 10
+      output_tokens: 16384
+      reasoning: auto
+      reasoning_budget: 4096
+      load_mode: mmap
+
+  high-reasoning-8k:
+    purpose: Higher reasoning budget with room for a complete answer.
+    runtime: vulkan
+    parameters:
+      gpu_layers: 10
+      output_tokens: 16384
+      reasoning: auto
+      reasoning_budget: 8192
+      load_mode: mmap
+
+  high-reasoning-16k:
+    purpose: Extended reasoning and answer budget for difficult coding tasks.
+    runtime: vulkan
+    parameters:
+      gpu_layers: 10
+      output_tokens: 32768
+      reasoning: auto
+      reasoning_budget: 16384
+      load_mode: mmap
+
+  high-reasoning-32k:
+    purpose: Maximum controlled reasoning budget for long or complex coding tasks.
+    runtime: vulkan
+    parameters:
+      gpu_layers: 10
+      output_tokens: 32768
+      reasoning: auto
+      reasoning_budget: 24576
+      load_mode: mmap
+
+  qwen35-q2k-hello-working:
+    model: Qwen3.5-9B-Coder-Q2_K
+    runtime: vulkan
+    status: limited-known-working
+    purpose: Known working minimal conversational response profile.
+    evidence: logs/qwen35-Q2_K-protocol/hello-sweep-20260921/summary.json
+    parameters:
+      gpu_layers: 10
+      context: 1024
+      output_tokens: 32
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 0
+      temperature: 0.0
+      top_p: 0.95
+      seed: 42
+    known_behavior:
+      expected_response: "**READY**"
+      repeated_runs: 3
+      consistency: 3/3
+      note: This profile is validated for a simple hello/readiness prompt, not for the coding task.
+
+  qwen35-q2k-hello-alternative:
+    model: Qwen3.5-9B-Coder-Q2_K
+    runtime: vulkan
+    status: limited-known-working
+    purpose: Alternative known working readiness profile.
+    evidence: logs/qwen35-Q2_K-protocol/hello-sweep-20260921/summary.json
+    parameters:
+      gpu_layers: 10
+      context: 1024
+      output_tokens: 32
+      load_mode: mmap
+      reasoning: "on"
+      reasoning_budget: 0
+      temperature: 0.0
+      top_p: 0.95
+      seed: 42
+    known_behavior:
+      expected_response: "**READY**"
+      repeated_runs: 3
+      consistency: 3/3
+
+  qwen35-q2k-coding-candidate:
+    model: Qwen3.5-9B-Coder-Q2_K
+    runtime: vulkan
+    status: incompatible-inconsistent
+    purpose: Exploratory coding profile; not proven until a no-unit-tests run passes.
+    parameters:
+      gpu_layers: 10
+      load_mode: mmap
+      output_tokens: 16384
+      reasoning: "off"
+      reasoning_budget: 0
+      temperature: 0.0
+      top_p: 0.95
+      seed: 42
+    validation:
+      required_test: normalize-events-no-unit-tests
+      contexts: [4096, 16384]
+      success_requires:
+        - extraction
+        - compilation
+        - independent_checker
+      note: The hello profile works, but this coding profile remains unverified.
+
+  qwen35-q2k-coding-thinking-candidate:
+    model: Qwen3.5-9B-Coder-Q2_K
+    runtime: vulkan
+    status: incompatible-inconsistent
+    purpose: Exploratory coding profile with explicit thinking enabled.
+    parameters:
+      gpu_layers: 10
+      load_mode: mmap
+      output_tokens: 16384
+      reasoning: "on"
+      reasoning_budget: 4096
+      temperature: 0.0
+      top_p: 0.95
+      seed: 42
+    validation:
+      required_test: normalize-events-no-unit-tests
+      contexts: [65536]
+      success_requires:
+        - extraction
+        - compilation
+        - independent_checker
+
+  # Architecture sweep proposals from logs/architecture-optimization/20260921-114733-2a2e9b86/results.csv.
+  # These require coding-quality validation before becoming defaults.
+  architecture-cuda-qwen25-coder7b-context:
+    model: qwen25-coder7b
+    runtime: cuda
+    status: proposed
+    purpose: Maximum stable context from the architecture sweep; validate before promotion.
+    parameters:
+      gpu_layers: 30
+      context: 262144
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-cuda-qwen25-coder7b-throughput:
+    model: qwen25-coder7b
+    runtime: cuda
+    status: proposed
+    purpose: Highest stable throughput at or above 32K context from the architecture sweep.
+    parameters:
+      gpu_layers: 30
+      context: 32768
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-cuda-qwen35-iq4xs-context:
+    model: qwen35-iq4xs
+    runtime: cuda
+    status: proposed
+    purpose: Maximum stable context from the architecture sweep; validate before promotion.
+    parameters:
+      gpu_layers: 30
+      context: 262144
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-cuda-qwen35-iq4xs-throughput:
+    model: qwen35-iq4xs
+    runtime: cuda
+    status: proposed
+    purpose: Highest stable throughput at or above 32K context from the architecture sweep.
+    parameters:
+      gpu_layers: 30
+      context: 32768
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-cuda-qwen35-q3km-context:
+    model: qwen35-q3km
+    runtime: cuda
+    status: proposed
+    purpose: Maximum stable context from the architecture sweep; validate before promotion.
+    parameters:
+      gpu_layers: 30
+      context: 262144
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-cuda-qwen35-q3km-throughput:
+    model: qwen35-q3km
+    runtime: cuda
+    status: proposed
+    purpose: Highest stable throughput at or above 32K context from the architecture sweep.
+    parameters:
+      gpu_layers: 30
+      context: 65536
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-vulkan-qwen25-coder7b-context:
+    model: qwen25-coder7b
+    runtime: vulkan
+    status: proposed
+    purpose: Maximum stable context from the architecture sweep; validate before promotion.
+    parameters:
+      gpu_layers: 10
+      context: 262144
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-vulkan-qwen25-coder7b-throughput:
+    model: qwen25-coder7b
+    runtime: vulkan
+    status: proposed
+    purpose: Highest stable throughput at or above 32K context from the architecture sweep.
+    parameters:
+      gpu_layers: 30
+      context: 32768
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-vulkan-qwen35-iq4xs-context:
+    model: qwen35-iq4xs
+    runtime: vulkan
+    status: proposed
+    purpose: Maximum stable context from the architecture sweep; validate before promotion.
+    parameters:
+      gpu_layers: 15
+      context: 262144
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-vulkan-qwen35-iq4xs-throughput:
+    model: qwen35-iq4xs
+    runtime: vulkan
+    status: proposed
+    purpose: Highest stable throughput at or above 32K context from the architecture sweep.
+    parameters:
+      gpu_layers: 30
+      context: 32768
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-vulkan-qwen35-q3km-context:
+    model: qwen35-q3km
+    runtime: vulkan
+    status: proposed
+    purpose: Maximum stable context from the architecture sweep; validate before promotion.
+    parameters:
+      gpu_layers: 15
+      context: 262144
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+  architecture-vulkan-qwen35-q3km-throughput:
+    model: qwen35-q3km
+    runtime: vulkan
+    status: proposed
+    purpose: Highest stable throughput at or above 32K context from the architecture sweep.
+    parameters:
+      gpu_layers: 30
+      context: 32768
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+
+limits:
+  note: Limits below are protocol guardrails for this machine, not model advertised limits.
+  context:
+    min: 1024
+    max: 262144
+  output_tokens:
+    min: 16
+    max: 16384
+  reasoning_budget:
+    unrestricted: -1
+    disabled: 0
+    controlled_min: 0
+    controlled_max: 24576
+  temperature:
+    min: 0.0
+    max: 2.0
+  top_p:
+    min: 0.0
+    max: 1.0
+  seed:
+    random: -1
+    deterministic_example: 42

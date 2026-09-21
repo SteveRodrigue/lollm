@@ -1,0 +1,22 @@
+# Local environments
+.venv/
+.ruff_cache/
+.vscode/
+__pycache__/
+*.py[cod]
+
+# Large local assets and runtime state
+cache/
+models/
+runtimes/
+logs/
+reports/
+
+# Local machine files
+*.log
+.env
+.env.*
+.ruff_cache/
+
+# Keep directory placeholders if added later
+!.gitkeep

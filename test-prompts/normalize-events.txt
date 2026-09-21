@@ -1,0 +1,10 @@
+You are reviewing a small Python project. Use the project context below to implement the requested function. Output only valid Python source code, with no Markdown fences and no explanation.
+
+PROJECT CONTEXT:
+The event-processing service accepts records with an id, timestamp, category, and payload. Records may arrive out of order, contain duplicate ids, or have missing optional metadata. The public API must remain deterministic, preserve input immutability, and report invalid records clearly. Existing callers expect ordinary Python lists and dictionaries. Reviewers require stable sorting, explicit edge-case handling, and focused tests.
+
+TASK:
+Implement normalize_events(events). Return a new list containing valid event dictionaries sorted by timestamp then id. Do not mutate the input. Reject records missing id or timestamp by raising ValueError with a useful message. Deduplicate by id, keeping the record with the newest timestamp. Preserve payload and optional metadata. Include unittest tests for empty input, sorting, duplicate ids, invalid records, immutability, and deterministic output.
+
+DEPENDENCY CONSTRAINT:
+Use only Python's standard library. Do not install packages, modify dependency files, add third-party imports, invoke pip or another package manager, or instruct the user to install anything. Output only the complete Python source code and tests.

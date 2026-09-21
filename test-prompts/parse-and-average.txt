@@ -1,0 +1,14 @@
+You are implementing a small Python utility. Output only valid Python source code, with no Markdown fences and no explanation.
+
+TASK:
+Implement a public function named parse_and_average that takes a list of strings representing numbers. Some strings may be invalid or empty.
+
+Requirements:
+1. Convert valid strings to floating-point numbers and calculate their arithmetic average.
+2. Ignore invalid strings and empty values without raising; use try...except for conversion.
+3. If the list is empty or contains no valid numbers, return 0.0.
+4. Return the final average rounded to 2 decimal places.
+5. Include type hints and a short docstring for parse_and_average.
+6. After the function, include a short pytest snippet testing a normal list and a list containing mixed valid, invalid, and empty values. The snippet may assume pytest is available, but the function itself must use only the Python standard library.
+
+Output only the complete Python source code and pytest snippet.

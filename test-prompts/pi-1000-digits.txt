@@ -1,0 +1,20 @@
+You are implementing a small Python utility. Output only valid Python source code, with no Markdown fences and no explanation.
+
+TASK:
+Implement a public function named generate_pi() that returns pi as a string with exactly 1000 digits after the decimal point.
+
+Requirements:
+- The returned value must start with "3.".
+- Return exactly 1002 characters: one digit before the decimal point, the decimal point, and exactly 1000 digits after it.
+- The digits must be mathematically correct through the 1000th digit after the decimal point.
+- Use only Python's standard library.
+- Use the Chudnovsky algorithm with `Decimal` arithmetic.
+- Use `math.factorial()` on integers. Never call `factorial()` on a `Decimal`; `Decimal.factorial()` does not exist.
+- Do not use `Decimal.atan`, `Decimal.acos`, or other nonexistent Decimal trigonometric methods.
+- Use enough precision and guard digits, then format the result in fixed-point form with exactly 1000 digits after the decimal point. Do not simply slice `str(pi)`.
+- Before returning, verify that the result starts with `3.`, has length 1002, and starts with `3.1415926535`.
+- Do not import third-party packages.
+- Do not install packages, modify dependency files, invoke pip or another package manager, or instruct the user to install anything.
+- Do not use a precomputed pi literal or copy a 1000-digit constant into the source; calculate the result at runtime.
+- Keep the requested public function name exactly: generate_pi.
+- Output only the complete Python source code.

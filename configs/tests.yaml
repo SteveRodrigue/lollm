@@ -1,0 +1,92 @@
+version: 1
+
+# Add a test by adding one item under tests.
+# Paths are relative to the repository root unless absolute paths are used.
+test_defaults:
+  language: python
+  prompt_encoding: utf-8
+  extraction_tool: tools/extract_model_python.py
+  independent_checker: tools/check_normalize_events.py
+  # contexts: [4096, 16384, 32768, 65536, 98304, 131072, 196608, 262144]
+  contexts: [32768, 65536, 98304, 131072, 196608, 262144]
+  output_budgets: [8192, 16384]
+
+# tests is the registry consumed by the test runner.
+tests:
+  - id: normalize-events-with-tests
+    description: Implement normalize_events and include model-authored unittest tests.
+    prompt_file_location: test-prompts/normalize-events.txt
+    language: python
+    extraction_function: normalize_events
+    tests: test-prompts/normalize-events.txt
+    model_tests:
+      required: true
+      score_denominator: 6
+    our_test:
+      checker: tools/check_normalize_events.py
+      score_denominator: 6
+
+  - id: normalize-events-no-unit-tests
+    description: Implement normalize_events without requiring model-authored tests.
+    prompt_file_location: test-prompts/normalize-events-no-unit-tests.txt
+    language: python
+    extraction_function: normalize_events
+    tests: null
+    model_tests:
+      required: false
+      score: N/A
+    our_test:
+      checker: tools/check_normalize_events.py
+      score_denominator: 6
+
+  - id: normalize-events-explicit-contract
+    description: Implement normalize_events with explicit independent-copy and field-error requirements.
+    prompt_file_location: test-prompts/normalize-events-explicit-contract.txt
+    language: python
+    extraction_function: normalize_events
+    tests: test-prompts/normalize-events-explicit-contract.txt
+    model_tests:
+      required: true
+      score_denominator: 6
+    our_test:
+      checker: tools/check_normalize_events.py
+      score_denominator: 6
+
+  - id: hello-readiness
+    description: Verify that the model can answer a minimal conversational prompt.
+    prompt_file_location: test-prompts/hello-ready.txt
+    language: text
+    tests: null
+    model_tests:
+      required: false
+      score: N/A
+    our_test:
+      checker: null
+      expected_response: READY
+      score_denominator: 1
+
+  - id: pi-1000-digits
+    description: Generate pi correctly to exactly 1000 digits after the decimal point.
+    prompt_file_location: test-prompts/pi-1000-digits.txt
+    language: python
+    extraction_function: generate_pi
+    tests: null
+    model_tests:
+      required: false
+      score: N/A
+    our_test:
+      checker: tools/check_pi_1000.py
+      score_denominator: 6
+
+  - id: parse-and-average
+    description: Implement parse_and_average with invalid-input handling, typing, documentation, and pytest examples.
+    prompt_file_location: test-prompts/parse-and-average.txt
+    language: python
+    extraction_function: parse_and_average
+    tests: null
+    model_tests:
+      required: false
+      score: N/A
+    our_test:
+      checker: tools/check_parse_and_average.py
+      score_denominator: 6
