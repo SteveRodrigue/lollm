@@ -52,10 +52,12 @@ class TestNormalizeEvents(unittest.TestCase):
 
     def test_newest_duplicate_wins(self) -> None:
         self.assertEqual(
-            normalize_events([
-                {"id": "a", "timestamp": 1, "payload": "old"},
-                {"id": "a", "timestamp": 3, "payload": "new"},
-            ]),
+            normalize_events(
+                [
+                    {"id": "a", "timestamp": 1, "payload": "old"},
+                    {"id": "a", "timestamp": 3, "payload": "new"},
+                ]
+            ),
             [{"id": "a", "timestamp": 3, "payload": "new"}],
         )
 

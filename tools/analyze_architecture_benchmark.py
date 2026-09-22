@@ -11,7 +11,6 @@ from typing import Any
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 ALL_LAYERS_SENTINEL = 99
 
@@ -59,7 +58,7 @@ def load_config(path: Path) -> dict[str, Any]:
     with resolve_path(path).open(encoding="utf-8") as stream:
         value = yaml.safe_load(stream)
     if not isinstance(value, dict):
-        raise ValueError(f"Expected a YAML mapping: {path}")
+        raise TypeError(f"Expected a YAML mapping: {path}")
     return value
 
 

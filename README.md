@@ -66,6 +66,17 @@ Retry only previously failed experiment keys:
 python tools/run_tests.py --retry-failed
 ```
 
+Resume an interrupted matrix by skipping cases that already have validation results:
+
+```powershell
+python tools/run_tests.py `
+  --model qwen25-coder7b `
+  --test pi-1000-digits `
+  --missing-only
+```
+
+`--skip-completed` is an equivalent spelling. A case is considered complete only after its validation ledger row is written, so an interrupted case remains eligible.
+
 Each run stores raw output, extracted candidates, validation logs, and ledger rows under `logs/`. Reports are regenerated after each checkpoint under `reports/latest/`:
 
 - `reports/latest/test-results.md` - aggregate readable results digest

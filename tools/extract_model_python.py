@@ -9,7 +9,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 FENCED_BLOCK = re.compile(r"```(?:python|py)?\s*\n?(.*?)```", re.IGNORECASE | re.DOTALL)
 
 

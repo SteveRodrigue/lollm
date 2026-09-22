@@ -11,13 +11,12 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
-
 
 ROOT = Path(__file__).resolve().parents[1]
 RECONCILER = ROOT / "tools" / "reconcile_evidence.py"
@@ -36,7 +35,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as stream:
         value = yaml.safe_load(stream)
     if not isinstance(value, dict):
-        raise ValueError(f"Expected a YAML mapping: {path}")
+        raise TypeError(f"Expected a YAML mapping: {path}")
     return value
 
 
@@ -77,7 +76,7 @@ def resolve_runtime(
         raise ValueError(f"Configured runtime is missing: {selected_id}")
     runtime_config = runtimes[selected_id]
     if not isinstance(runtime_config, dict):
-        raise ValueError(f"Runtime configuration must be a mapping: {selected_id}")
+        raise TypeError(f"Runtime configuration must be a mapping: {selected_id}")
     return (
         selected_id,
         runtime_config,
@@ -144,6 +143,7 @@ def sample_gpu(gpu_log: Path, rows: list[str]) -> None:
             "--format=csv,noheader,nounits",
         ],
         capture_output=True,
+        check=False,
         text=True,
     )
     if result.returncode == 0:
@@ -314,6 +314,27 @@ def prior_failed_keys(
     return {key for key, row in latest.items() if row.get("status") != "practical-pass"}
 
 
+def completed_case_keys(
+    log_root: Path,
+) -> set[tuple[str, str, str, int, int]]:
+    completed: set[tuple[str, str, str, int, int]] = set()
+    for ledger in log_root.glob("*/results.jsonl"):
+        for line in ledger.read_text(encoding="utf-8-sig").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("stage") != "quality-validation":
+                continue
+            completed.add((
+                str(row.get("model")),
+                str(row.get("prompt_name")),
+                str(row.get("profile")),
+                int(row.get("context", 0)),
+                int(row.get("output_budget", 0)),
+            ))
+    return completed
+
+
 def validate_case(
     case: Case, raw_path: Path, stem: str
 ) -> tuple[int, int, int, int, Path]:
@@ -328,7 +349,6 @@ def validate_case(
 
     if language != "python":
         output = read_text_file(raw_path)
-        prompt = case.test.get("prompt_file_location", "")
         expected = str(test.get("our_test", {}).get("expected_response", ""))
         response_match = re.search(r">\s.*?\n(.*?)\n\s*\[ Prompt:", output, re.DOTALL)
         response = response_match.group(1).strip() if response_match else ""
@@ -352,6 +372,7 @@ def validate_case(
             str(raw_path.with_name(f"{stem}-extraction.json")),
         ],
         capture_output=True,
+        check=False,
     )
     extraction_log.write_bytes(extraction.stdout + extraction.stderr)
     if extraction.returncode != 0:
@@ -370,7 +391,9 @@ def validate_case(
         )
 
     compile_result = subprocess.run(
-        [sys.executable, "-m", "py_compile", str(generated)], capture_output=True
+        [sys.executable, "-m", "py_compile", str(generated)],
+        capture_output=True,
+        check=False,
     )
     compile_log.write_bytes(compile_result.stdout + compile_result.stderr)
     compile_code = compile_result.returncode
@@ -380,6 +403,7 @@ def validate_case(
         unittest_result = subprocess.run(
             [sys.executable, "-m", "unittest", str(generated), "-v"],
             capture_output=True,
+            check=False,
         )
         unittest_log.write_bytes(unittest_result.stdout + unittest_result.stderr)
         unittest_code = unittest_result.returncode
@@ -401,6 +425,7 @@ def validate_case(
                 str(independent_json),
             ],
             capture_output=True,
+            check=False,
         )
         independent_log.write_bytes(
             independent_result.stdout + independent_result.stderr
@@ -446,6 +471,13 @@ def main() -> int:
         action="store_true",
         help="Run only previously failed quality cases",
     )
+    parser.add_argument(
+        "--skip-completed",
+        "--missing-only",
+        dest="skip_completed",
+        action="store_true",
+        help="Skip cases that already have a completed validation ledger row",
+    )
     parser.add_argument("--dry-run", action="store_true")
     arguments = parser.parse_args()
 
@@ -487,9 +519,14 @@ def main() -> int:
         if arguments.retry_failed
         else set()
     )
+    completed = (
+        completed_case_keys(ROOT / "logs") if arguments.skip_completed else set()
+    )
     contexts = arguments.context
     budgets = arguments.output_budget
 
+    total_cases = 0
+    completed_cases = 0
     planned_cases = 0
     for planned_model_id in selected_models:
         planned_model = models[planned_model_id]
@@ -518,10 +555,30 @@ def main() -> int:
                             planned_context,
                             planned_budget,
                         )
-                        if not arguments.retry_failed or planned_key in failed:
+                        completed_key = (
+                            planned_key[0],
+                            planned_test_id,
+                            planned_profile_name,
+                            planned_context,
+                            planned_budget,
+                        )
+                        total_cases += 1
+                        if completed_key in completed:
+                            completed_cases += 1
+                        if (not arguments.retry_failed or planned_key in failed) and (
+                            not arguments.skip_completed
+                            or completed_key not in completed
+                        ):
                             planned_cases += 1
     case_number = 0
-    print(f"[runner] Planned tests: {planned_cases}", flush=True)
+    if arguments.skip_completed:
+        print(
+            f"[runner] Matrix: {total_cases} total; "
+            f"{completed_cases} completed; {planned_cases} to run",
+            flush=True,
+        )
+    else:
+        print(f"[runner] Planned tests: {planned_cases}", flush=True)
 
     for model_id in selected_models:
         model = models[model_id]
@@ -560,6 +617,15 @@ def main() -> int:
                             budget,
                         )
                         if arguments.retry_failed and key not in failed:
+                            continue
+                        completed_key = (
+                            key[0],
+                            test_id,
+                            profile_name,
+                            context,
+                            budget,
+                        )
+                        if arguments.skip_completed and completed_key in completed:
                             continue
                         case_number += 1
                         case = Case(model, test, profile, context, budget)

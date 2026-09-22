@@ -12,11 +12,10 @@ import subprocess
 import sys
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
-
 
 ROOT = Path(__file__).resolve().parents[1]
 PROMPT = "Reply with exactly READY, then continue with a concise technical explanation of GPU offload."
@@ -181,7 +180,7 @@ def load_yaml(path: Path) -> dict[str, object]:
     with resolve_path(path).open(encoding="utf-8") as stream:
         value = yaml.safe_load(stream)
     if not isinstance(value, dict):
-        raise ValueError(f"Expected a YAML mapping: {path}")
+        raise TypeError(f"Expected a YAML mapping: {path}")
     return value
 
 
@@ -189,7 +188,7 @@ def configured_models(args: argparse.Namespace) -> list[dict[str, str]]:
     configuration = load_yaml(args.models_config)
     models = configuration.get("models", [])
     if not isinstance(models, list):
-        raise ValueError("models config must contain a models list")
+        raise TypeError("models config must contain a models list")
     by_id = {
         str(model["id"]): model
         for model in models
@@ -217,16 +216,15 @@ def selected_runtimes(
     runtimes: list[tuple[str, Path, list[str], list[int], str]] = []
     runtime_registry = configuration.get("runtimes", {})
     if not isinstance(runtime_registry, dict):
-        raise ValueError("runtimes must be a mapping")
+        raise TypeError("runtimes must be a mapping")
 
     def add_runtime(runtime_id: str, override: Path | None) -> None:
         runtime_config = runtime_registry.get(runtime_id)
         if not isinstance(runtime_config, dict):
-            raise ValueError(f"Runtime is not configured: {runtime_id}")
+            raise TypeError(f"Runtime is not configured: {runtime_id}")
         backend = str(runtime_config.get("backend", runtime_id))
         vendor = str(runtime_config.get("vendor", "NVIDIA"))
         gpu_indices = [int(index) for index in runtime_config.get("gpu_indices", [0])]
-        split_mode = str(runtime_config.get("split_mode", "none"))
         devices = [str(device) for device in runtime_config.get("devices", [])]
         if not devices:
             raise ValueError(f"No devices configured for runtime {runtime_id}")
@@ -362,7 +360,7 @@ def run_command(
                 peak_memory = max(peak_memory or memory, memory)
             sample = sample_memory(process.pid)
             for key, value in sample.items():
-                if key.endswith("peak_rss_mib") or key.endswith("peak_private_mib"):
+                if key.endswith(("peak_rss_mib", "peak_private_mib")):
                     memory_stats[key] = max(memory_stats.get(key, 0.0), value)
                 elif key.endswith("total_mib"):
                     memory_stats[key] = value
@@ -468,7 +466,7 @@ def main() -> int:
     configuration = load_yaml(args.models_config)
     architecture_defaults = configuration.get("architecture_defaults", {})
     if not isinstance(architecture_defaults, dict):
-        raise ValueError("architecture_defaults must be a mapping")
+        raise TypeError("architecture_defaults must be a mapping")
     default_backends = architecture_defaults.get("backends", ["Vulkan"])
     if not isinstance(default_backends, list) or not default_backends:
         raise ValueError("architecture_defaults.backends must be a non-empty list")
@@ -502,7 +500,7 @@ def main() -> int:
     ):
         raise ValueError("repeats, context, and output-tokens must be positive")
 
-    run_id = f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}"
+    run_id = f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:8]}"
     run_directory = resolve_path(args.output_root) / run_id
     runtimes = selected_runtimes(args, configuration)
     available_runtimes = []
@@ -623,7 +621,7 @@ def main() -> int:
                             "-p",
                             PROMPT,
                         ]
-                        start = datetime.now()
+                        start = datetime.now(timezone.utc)
                         (
                             exit_code,
                             output,
@@ -632,7 +630,7 @@ def main() -> int:
                             peak_memory,
                             memory_stats,
                         ) = run_command(runtime, arguments, log_path, gpu_indices)
-                        duration = (datetime.now() - start).total_seconds()
+                        duration = (datetime.now(timezone.utc) - start).total_seconds()
                         generation = GENERATION_RE.search(output)
                         prompt_rate = PROMPT_RE.search(output)
                         generation_rate = (

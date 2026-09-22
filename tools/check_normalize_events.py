@@ -159,14 +159,16 @@ def run_checks(function: Any) -> tuple[list[str], list[dict[str, str]]]:
                 "input immutability: post-return input mutation changed result"
             )
 
-    checks.extend([
-        ("empty and single input", check_empty_and_single),
-        ("sorting and ties", check_sorting_and_ties),
-        ("newest duplicate wins", check_newest_duplicate_wins),
-        ("field preservation", check_field_preservation),
-        ("invalid records", check_invalid_records),
-        ("immutability and determinism", check_immutability_and_determinism),
-    ])
+    checks.extend(
+        [
+            ("empty and single input", check_empty_and_single),
+            ("sorting and ties", check_sorting_and_ties),
+            ("newest duplicate wins", check_newest_duplicate_wins),
+            ("field preservation", check_field_preservation),
+            ("invalid records", check_invalid_records),
+            ("immutability and determinism", check_immutability_and_determinism),
+        ]
+    )
 
     passed: list[str] = []
     failed: list[dict[str, str]] = []
@@ -174,10 +176,12 @@ def run_checks(function: Any) -> tuple[list[str], list[dict[str, str]]]:
         try:
             check_function()
         except Exception as error:  # noqa: BLE001 - report every independent failure.
-            failed.append({
-                "name": check_name,
-                "error": f"{type(error).__name__}: {error}",
-            })
+            failed.append(
+                {
+                    "name": check_name,
+                    "error": f"{type(error).__name__}: {error}",
+                }
+            )
         else:
             passed.append(check_name)
     return passed, failed

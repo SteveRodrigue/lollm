@@ -58,7 +58,7 @@ def check_dependency_constraint(source_path: Path) -> None:
 def run_checks(module: ModuleType) -> tuple[list[str], list[dict[str, str]]]:
     function = module.__dict__.get("generate_pi")
     if not callable(function):
-        raise AssertionError("missing callable generate_pi")
+        raise TypeError("missing callable generate_pi")
     expected = expected_pi()
     checks: list[tuple[str, Any]] = [
         ("string result", lambda: isinstance(function(), str)),

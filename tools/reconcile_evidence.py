@@ -20,6 +20,16 @@ def report_directory(evidence_path: Path) -> Path:
     return evidence_path.parent.parent / "reports" / "latest"
 
 
+def display_path(value: Any, repository_root: Path) -> str:
+    path = Path(str(value))
+    if not path.is_absolute():
+        return path.as_posix()
+    try:
+        return path.relative_to(repository_root).as_posix()
+    except ValueError:
+        return f"<local-path>/{path.name}"
+
+
 def read_rows(log_root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for ledger_path in sorted(log_root.glob("*/results.jsonl")):
@@ -39,7 +49,7 @@ def read_rows(log_root: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def markdown(rows: list[dict[str, Any]]) -> str:
+def markdown(rows: list[dict[str, Any]], repository_root: Path) -> str:
     lines = [
         BEGIN,
         "## Durable Test Ledger Summary",
@@ -52,13 +62,13 @@ def markdown(rows: list[dict[str, Any]]) -> str:
     for row in rows:
         values = [
             str(row.get("date", "")),
-            str(row.get("model", "")).replace("|", "\\|"),
+            display_path(row.get("model", ""), repository_root).replace("|", "\\|"),
             str(row.get("stage", "")),
             str(row.get("context", "")),
             str(row.get("gpu_layers", "")),
             str(row.get("status", "")),
             str(row.get("outcome", "")).replace("|", "\\|"),
-            str(row.get("log", "")).replace("|", "\\|"),
+            display_path(row.get("log", ""), repository_root).replace("|", "\\|"),
         ]
         lines.append("| " + " | ".join(values) + " |")
     lines.extend([END, ""])
@@ -270,10 +280,12 @@ def summary_markdown(rows: list[dict[str, Any]], test_name: str | None = None) -
             str(row.get("prompt_name", "unknown")) for row in profile_rows
         })
         tests_label = ", ".join(budget_tests) if budget_tests else "none yet"
-        lines.extend([
-            f"## Profile `{profile_name}` | Output `-n {budget}` | "
-            f"Reasoning `{profile_rows[0].get('reasoning_mode') or ('unspecified' if profile_name != 'legacy-output-' + str(budget) else 'legacy')}` / "
-            f"budget `{profile_rows[0].get('reasoning_budget') if profile_rows[0].get('reasoning_budget') is not None else ('unspecified' if profile_name != 'legacy-output-' + str(budget) else 'legacy')}`",
+        lines.extend((
+            (
+                f"## Profile `{profile_name}` | Output `-n {budget}` | "
+                f"Reasoning `{profile_rows[0].get('reasoning_mode') or ('unspecified' if profile_name != 'legacy-output-' + str(budget) else 'legacy')}` / "
+                f"budget `{profile_rows[0].get('reasoning_budget') if profile_rows[0].get('reasoning_budget') is not None else ('unspecified' if profile_name != 'legacy-output-' + str(budget) else 'legacy')}`"
+            ),
             "",
             f"**Output budget:** `-n {budget}`",
             f"**Tests represented:** `{tests_label}`",
@@ -281,7 +293,7 @@ def summary_markdown(rows: list[dict[str, Any]], test_name: str | None = None) -
             "",
             "| Test | Model | Context | Test completion | Compiled | Model-test | Our-test | Token/s | Duration (min) | Peak VRAM (MiB) | Both 6/6 |",
             "| --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
-        ])
+        ))
         budget_rows = profile_rows
         for generation in sorted(
             budget_rows,
@@ -630,7 +642,8 @@ def main() -> int:
     parser.add_argument("--logs", type=Path, required=True)
     arguments = parser.parse_args()
     rows = read_rows(arguments.logs)
-    update_evidence(arguments.evidence, markdown(rows))
+    repository_root = arguments.evidence.resolve().parent.parent
+    update_evidence(arguments.evidence, markdown(rows, repository_root))
     reports = report_directory(arguments.evidence)
     reports.mkdir(parents=True, exist_ok=True)
     report_path = reports / REPORT_NAME

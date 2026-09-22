@@ -70,7 +70,7 @@ def run_pytest(source_path: Path) -> tuple[str, str]:
 def run_checks(module: ModuleType) -> tuple[list[str], list[dict[str, str]]]:
     function = module.__dict__.get("parse_and_average")
     if not callable(function):
-        raise AssertionError("missing callable parse_and_average")
+        raise TypeError("missing callable parse_and_average")
     checks: list[tuple[str, Any]] = [
         ("normal average", lambda: function(["1", "2", "3"]) == 2.0),
         ("mixed invalid values", lambda: function(["1.5", "bad", "", "2.5"]) == 2.0),
