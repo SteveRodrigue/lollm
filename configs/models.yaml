@@ -26,6 +26,28 @@ runtimes:
     split_mode: none
     cpu_only_allowed: false
     load_mode: mmap
+  vulkan-nightly:
+    executable: runtimes/llama-vulkan-b11093/llama-cli.exe
+    version: 0.4.1-dev
+    build: 11093
+    backend: Vulkan
+    vendor: NVIDIA
+    gpu_indices: [0]
+    devices: [Vulkan0]
+    split_mode: none
+    cpu_only_allowed: false
+    load_mode: mmap
+  cuda-nightly:
+    executable: runtimes/llama-cuda-b11093/llama-cli.exe
+    version: 0.4.1-dev
+    build: 11093
+    backend: CUDA
+    vendor: NVIDIA
+    gpu_indices: [0]
+    devices: [CUDA0]
+    split_mode: none
+    cpu_only_allowed: false
+    load_mode: mmap
 
 models:
   - id: qwen25-coder7b
@@ -56,6 +78,14 @@ models:
     path: models/Qwen3.5-9B-Coder-IQ4_XS/Qwen3.5-9B-Coder.IQ4_XS.gguf
     quantization: IQ4_XS
     default_profile: controlled-quality-8k
+
+  - id: qwen38-flash-next-gsq-rco-iq2xs
+    name: Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS
+    path: models/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf
+    quantization: IQ2_XS
+    status: experimental
+    default_profile: qwen38-iq2xs-basic
+    source: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
 
 # These values are fixed for comparable runs unless a profile overrides them.
 common_parameters:
@@ -101,16 +131,58 @@ common_parameters:
     flag: --reasoning-budget
     value: 4096
     min: -1
+  lazy_mode:
+    flag: --lazy-mode
+    value: "off"
+    values: ["on", "off"]
   prompt_encoding: utf-8
 
 # Architecture-only sweep defaults. These do not change the normal comparison settings above.
 architecture_defaults:
   backends: [Vulkan, CUDA]
-  gpu_layers: [1, 5, 10, 15, 20, 30, 99]
+  # gpu_layers: [1, 5, 10, 15, 20, 30, 99]
+  gpu_layers: [4, 8, 12, 16, 24, 48, 99]
   output_tokens: 256
   repeats: 2
 
 profiles:
+  qwen38-iq2xs-basic:
+    purpose: Minimal IQ2_XS smoke and basic coding test with lazy n-gram loading.
+    runtime: vulkan
+    model: qwen38-flash-next-gsq-rco-iq2xs
+    parameters: &qwen38_iq2xs_parameters
+      gpu_layers: 1
+      context: 1024
+      output_tokens: 1024
+      reasoning: "off"
+      reasoning_budget: 0
+      load_mode: mmap
+      lazy_mode: "on"
+
+  qwen38-iq2xs-stable-vulkan:
+    purpose: IQ2_XS tests on the stable Vulkan runtime.
+    runtime: vulkan
+    model: qwen38-flash-next-gsq-rco-iq2xs
+    parameters: *qwen38_iq2xs_parameters
+
+  qwen38-iq2xs-stable-cuda:
+    purpose: IQ2_XS tests on the stable CUDA runtime.
+    runtime: cuda
+    model: qwen38-flash-next-gsq-rco-iq2xs
+    parameters: *qwen38_iq2xs_parameters
+
+  qwen38-iq2xs-nightly-vulkan:
+    purpose: IQ2_XS tests on the nightly Vulkan runtime.
+    runtime: vulkan-nightly
+    model: qwen38-flash-next-gsq-rco-iq2xs
+    parameters: *qwen38_iq2xs_parameters
+
+  qwen38-iq2xs-nightly-cuda:
+    purpose: IQ2_XS tests on the nightly CUDA runtime.
+    runtime: cuda-nightly
+    model: qwen38-flash-next-gsq-rco-iq2xs
+    parameters: *qwen38_iq2xs_parameters
+
   controlled-quality-8k:
     purpose: Comparable coding-quality run with a normal output budget.
     runtime: vulkan

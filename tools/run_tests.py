@@ -108,6 +108,8 @@ def command_for(
         str(gpu_indices[0] if gpu_indices else 0),
         "--load-mode",
         str(parameters.get("load_mode", "mmap")),
+        "--lazy-mode",
+        str(parameters.get("lazy_mode", "off")),
         "-c",
         str(case.context),
         "-n",
@@ -458,7 +460,11 @@ def main() -> int:
         dest="test_ids",
         help="Test ID; repeat for multiple tests",
     )
-    parser.add_argument("--profile", help="Override the model's default profile")
+    parser.add_argument(
+        "--profile",
+        action="append",
+        help="Override the model's default profile; repeat for multiple profiles",
+    )
     parser.add_argument(
         "--all-profiles",
         action="store_true",
@@ -507,7 +513,7 @@ def main() -> int:
                 compatible.append(profile_name)
             return compatible
         if arguments.profile:
-            return [arguments.profile]
+            return arguments.profile
         return [
             model.get("default_profile")
             if test.get("id") == "hello-readiness"
@@ -639,11 +645,14 @@ def main() -> int:
                         gpu_log = directory / f"{stem}-gpu.csv"
                         ledger = directory / "results.jsonl"
                         command = command_for(case, executable, prompt, runtime_config)
+                        effective_parameters = merge_parameters(common, profile)
+                        gpu_layers = effective_parameters.get("gpu_layers", 10)
                         if arguments.dry_run:
                             print(
                                 f"[runner] Test {case_number} of {planned_cases}: "
                                 f"would run model={model_id} test={test_id} "
-                                f"profile={profile_name} context={context} output={budget}",
+                                f"profile={profile_name} context={context} output={budget} "
+                                f"ngl={gpu_layers}",
                                 flush=True,
                             )
                             print(" ".join(command))
@@ -651,7 +660,8 @@ def main() -> int:
                         print(
                             f"[runner] Test {case_number} of {planned_cases}: "
                             f"starting model={model_id} test={test_id} "
-                            f"profile={profile_name} context={context} output={budget}",
+                            f"profile={profile_name} context={context} output={budget} "
+                            f"ngl={gpu_layers}",
                             flush=True,
                         )
                         now_utc = datetime.now(timezone.utc)
@@ -725,7 +735,7 @@ def main() -> int:
                         reconcile()
                         print(
                             f"[runner] generation complete: status={generation_status} "
-                            f"duration={duration / 60:.2f}min log={log_path}",
+                            f"duration={duration / 60:.2f}min ngl={gpu_layers} log={log_path}",
                             flush=True,
                         )
                         if exit_code != 0:

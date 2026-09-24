@@ -135,6 +135,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Override the CUDA executable; defaults to the downloaded isolated runtime.",
     )
+    parser.add_argument(
+        "--runtime",
+        action="append",
+        dest="runtime_ids",
+        help="Runtime registry ID; repeat to select multiple runtimes.",
+    )
+    parser.add_argument(
+        "--all-runtimes",
+        action="store_true",
+        help="Run every runtime in the model registry.",
+    )
     parser.add_argument("--backend", choices=("Vulkan", "CUDA", "Both"))
     parser.add_argument(
         "--gpu-layers",
@@ -212,8 +223,8 @@ def configured_models(args: argparse.Namespace) -> list[dict[str, str]]:
 
 def selected_runtimes(
     args: argparse.Namespace, configuration: dict[str, object]
-) -> list[tuple[str, Path, list[str], list[int], str]]:
-    runtimes: list[tuple[str, Path, list[str], list[int], str]] = []
+) -> list[tuple[str, str, Path, list[str], list[int], str, str]]:
+    runtimes: list[tuple[str, str, Path, list[str], list[int], str, str]] = []
     runtime_registry = configuration.get("runtimes", {})
     if not isinstance(runtime_registry, dict):
         raise TypeError("runtimes must be a mapping")
@@ -225,12 +236,26 @@ def selected_runtimes(
         backend = str(runtime_config.get("backend", runtime_id))
         vendor = str(runtime_config.get("vendor", "NVIDIA"))
         gpu_indices = [int(index) for index in runtime_config.get("gpu_indices", [0])]
+        split_mode = str(runtime_config.get("split_mode", "none"))
         devices = [str(device) for device in runtime_config.get("devices", [])]
         if not devices:
             raise ValueError(f"No devices configured for runtime {runtime_id}")
         path = resolve_path(override or Path(str(runtime_config["executable"])))
-        runtimes.append((backend, path, devices, gpu_indices, vendor))
+        runtimes.append((
+            runtime_id,
+            backend,
+            path,
+            devices,
+            gpu_indices,
+            split_mode,
+            vendor,
+        ))
 
+    if args.all_runtimes or args.runtime_ids:
+        selected_ids = args.runtime_ids or list(runtime_registry)
+        for runtime_id in selected_ids:
+            add_runtime(runtime_id, None)
+        return runtimes
     if args.backend in ("Vulkan", "Both"):
         add_runtime("vulkan", args.vulkan_runtime)
     if args.backend in ("CUDA", "Both"):
@@ -504,20 +529,36 @@ def main() -> int:
     run_directory = resolve_path(args.output_root) / run_id
     runtimes = selected_runtimes(args, configuration)
     available_runtimes = []
-    for backend, runtime, devices, gpu_indices, split_mode in runtimes:
+    for (
+        runtime_id,
+        backend,
+        runtime,
+        devices,
+        gpu_indices,
+        split_mode,
+        vendor,
+    ) in runtimes:
         if not runtime.exists():
             raise FileNotFoundError(f"Runtime does not exist: {runtime}")
-        available_runtimes.append((backend, runtime, devices, gpu_indices, split_mode))
+        available_runtimes.append((
+            runtime_id,
+            backend,
+            runtime,
+            devices,
+            gpu_indices,
+            split_mode,
+            vendor,
+        ))
     for model in models:
         model_path = resolve_path(Path(model["path"]))
         if not model_path.exists():
             raise FileNotFoundError(f"Model does not exist: {model_path}")
     selected_gpu_indices = sorted({
         gpu_index
-        for _, _, _, gpu_indices, _ in available_runtimes
+        for _, _, _, _, gpu_indices, _, _ in available_runtimes
         for gpu_index in gpu_indices
     })
-    for _, _, _, gpu_indices, vendor in available_runtimes:
+    for _, _, _, _, gpu_indices, _, vendor in available_runtimes:
         validate_gpu_vendor(gpu_indices, vendor)
     gpu_name, gpu_memory_mib = detect_gpu_info(selected_gpu_indices)
     if not gpu_name or gpu_memory_mib is None:
@@ -532,7 +573,10 @@ def main() -> int:
     )
     if args.dry_run:
         print("Architecture benchmark dry run: configuration valid")
-        print(f"Backends: {', '.join(backend for backend, *_ in available_runtimes)}")
+        print(
+            "Runtimes: "
+            + ", ".join(runtime_id for runtime_id, *_ in available_runtimes)
+        )
         print(f"Models: {', '.join(model['id'] for model in models)}")
         print(f"Contexts: {', '.join(map(str, contexts))}")
         print(f"GPU layers: {', '.join(map(str, args.gpu_layers))}")
@@ -550,11 +594,11 @@ def main() -> int:
             f"output_tokens={args.output_tokens}",
             f"repeats={args.repeats}",
             f"gpu_layers={','.join(map(str, args.gpu_layers))}",
-            f"backends={','.join(backend for backend, *_ in runtimes)}",
+            f"runtimes={','.join(runtime_id for runtime_id, *_ in runtimes)}",
             *[
-                f"runtime_{backend.lower()}={path}; devices={','.join(devices)}; "
+                f"runtime_{runtime_id}={path}; devices={','.join(devices)}; "
                 f"gpu_indices={','.join(map(str, gpu_indices))}; split_mode={split_mode}"
-                for backend, path, devices, gpu_indices, split_mode in runtimes
+                for runtime_id, _, path, devices, gpu_indices, split_mode, _ in runtimes
             ],
             "purpose=architecture-optimization; excluded from normal model comparison",
         ])
@@ -566,7 +610,15 @@ def main() -> int:
     results_path = run_directory / "results.csv"
     results_path.touch()
     completed_tests = 0
-    for backend, runtime, devices, gpu_indices, split_mode in available_runtimes:
+    for (
+        runtime_id,
+        backend,
+        runtime,
+        devices,
+        gpu_indices,
+        split_mode,
+        _,
+    ) in available_runtimes:
         version = subprocess.run(
             [str(runtime), "--version"],
             capture_output=True,
@@ -574,7 +626,7 @@ def main() -> int:
             check=False,
             cwd=ROOT,
         ).stdout.strip()
-        backend_directory = run_directory / backend
+        backend_directory = run_directory / runtime_id
         backend_directory.mkdir()
 
         for model in models:
@@ -621,6 +673,13 @@ def main() -> int:
                             "-p",
                             PROMPT,
                         ]
+                        test_number = completed_tests + 1
+                        print(
+                            f"Test {test_number} of {total_tests}: "
+                            f"{model['id']} {runtime_id} context {context} "
+                            f"-ngl {layers} repeat {repeat} -> started",
+                            flush=True,
+                        )
                         start = datetime.now(timezone.utc)
                         (
                             exit_code,
@@ -645,7 +704,7 @@ def main() -> int:
                         )
                         rows.append({
                             "run_id": run_id,
-                            "backend": backend,
+                            "backend": runtime_id,
                             "runtime": version,
                             "gpu_index": ",".join(map(str, gpu_indices)),
                             "gpu_name": gpu_name,
@@ -673,7 +732,7 @@ def main() -> int:
                         completed_tests += 1
                         print(
                             f"Test {completed_tests} of {total_tests}: "
-                            f"{model['id']} {backend} context {context} "
+                            f"{model['id']} {runtime_id} context {context} "
                             f"-ngl {layers} repeat {repeat} -> {status}",
                             flush=True,
                         )
