@@ -515,7 +515,7 @@ def main() -> int:
         if arguments.profile:
             return arguments.profile
         return [
-            model.get("default_profile")
+            model.get("default_profile") or "controlled-quality-8k"
             if test.get("id") == "hello-readiness"
             else "controlled-quality-8k"
         ]

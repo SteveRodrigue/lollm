@@ -87,6 +87,24 @@ models:
     default_profile: qwen38-iq2xs-basic
     source: ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF
 
+  - id: gemma4-e4b-it-q4km
+    name: Gemma-4-E4B-it-Q4_K_M
+    path: models/gemma-4-E4B-it-Q4_K_M/gemma-4-E4B-it-Q4_K_M.gguf
+    quantization: Q4_K_M
+    status: active
+    default_profile: gemma4-e4b-controlled-8k
+    source: unsloth/gemma-4-E4B-it-GGUF
+    layers_package: models/gemma-4-E4B-it-Q4_K_M-layers
+
+  - id: spark-x25-4b-q8
+    name: Spark-X2.5-4B-Q8_0
+    path: models/Spark-X2.5-4B-GGUF/Spark-X2.5-4B-Q8_0.gguf
+    quantization: Q8_0
+    status: active
+    default_profile: spark-x25-4b-controlled-8k
+    source: sizzlebop/Spark-X2.5-4B-GGUF
+    context_length: 1048576
+
 # These values are fixed for comparable runs unless a profile overrides them.
 common_parameters:
   context:
@@ -478,6 +496,124 @@ profiles:
       load_mode: mmap
       reasoning: auto
       reasoning_budget: 4096
+
+  gemma4-e4b-controlled-8k:
+    model: gemma4-e4b-it-q4km
+    runtime: vulkan
+    purpose: Controlled coding run with full GPU layer offload and disabled reasoning for agentic tasks.
+    parameters:
+      gpu_layers: 42
+      context: 32768
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: "off"
+      reasoning_budget: 0
+      temperature: 0.2
+      top_p: 0.95
+      seed: 42
+
+  gemma4-e4b-throughput-cuda:
+    model: gemma4-e4b-it-q4km
+    runtime: cuda
+    purpose: High-throughput benchmark profile on CUDA with 42 GPU layers.
+    parameters:
+      gpu_layers: 42
+      context: 16384
+      output_tokens: 4096
+      load_mode: mmap
+      reasoning: "off"
+      reasoning_budget: 0
+      temperature: 0.0
+      top_p: 0.95
+      seed: 42
+
+  spark-x25-4b-controlled-8k:
+    model: spark-x25-4b-q8
+    runtime: vulkan
+    purpose: Controlled coding-quality run for Spark-X2.5-4B Q8_0 with thinking enabled.
+    parameters:
+      gpu_layers: 10
+      context: 32768
+      output_tokens: 8192
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+      temperature: 0.2
+      top_p: 0.95
+      seed: 42
+
+  spark-x25-4b-vulkan-nightly-quality:
+    model: spark-x25-4b-q8
+    runtime: vulkan-nightly
+    purpose: Coding-quality run for Spark-X2.5-4B Q8_0 on the nightly Vulkan runtime.
+    parameters:
+      gpu_layers: 32
+      load_mode: mmap
+      reasoning: auto
+      reasoning_budget: 4096
+      temperature: 0.2
+      top_p: 0.95
+      seed: 42
+
+  spark-x25-4b-smoke-vulkan:
+    model: spark-x25-4b-q8
+    runtime: vulkan
+    purpose: Hello-readiness smoke test on stable Vulkan runtime.
+    parameters:
+      gpu_layers: 10
+      context: 1024
+      output_tokens: 32
+      load_mode: mmap
+      reasoning: "off"
+      reasoning_budget: 0
+      temperature: 0.0
+      top_p: 0.95
+      seed: 42
+
+  spark-x25-4b-smoke-cuda:
+    model: spark-x25-4b-q8
+    runtime: cuda
+    purpose: Hello-readiness smoke test on stable CUDA runtime.
+    parameters:
+      gpu_layers: 10
+      context: 1024
+      output_tokens: 32
+      load_mode: mmap
+      reasoning: "off"
+      reasoning_budget: 0
+      temperature: 0.0
+      top_p: 0.95
+      seed: 42
+
+  spark-x25-4b-smoke-vulkan-nightly:
+    model: spark-x25-4b-q8
+    runtime: vulkan-nightly
+    purpose: Hello-readiness smoke test on nightly Vulkan runtime.
+    parameters:
+      gpu_layers: 10
+      context: 1024
+      output_tokens: 32
+      load_mode: mmap
+      reasoning: "off"
+      reasoning_budget: 0
+      temperature: 0.0
+      top_p: 0.95
+      seed: 42
+
+  spark-x25-4b-smoke-cuda-nightly:
+    model: spark-x25-4b-q8
+    runtime: cuda-nightly
+    purpose: Hello-readiness smoke test on nightly CUDA runtime.
+    parameters:
+      gpu_layers: 10
+      context: 1024
+      output_tokens: 32
+      load_mode: mmap
+      reasoning: "off"
+      reasoning_budget: 0
+      temperature: 0.0
+      top_p: 0.95
+      seed: 42
 
 limits:
   note: Limits below are protocol guardrails for this machine, not model advertised limits.

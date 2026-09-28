@@ -160,7 +160,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="One or more context sizes; defaults to common_parameters.context.values.",
     )
-    parser.add_argument("--output-tokens", type=int)
+    parser.add_argument("--output-tokens", type=int, nargs="+")
     parser.add_argument("--repeats", type=int)
     parser.add_argument(
         "--dry-run",
@@ -411,19 +411,21 @@ def run_command(
 def write_matrix_report(
     path: Path, rows: list[dict[str, object]], expected_repeats: int
 ) -> None:
-    grouped: dict[tuple[str, str, int, int], list[dict[str, object]]] = {}
+    grouped: dict[tuple[str, str, int, int, int], list[dict[str, object]]] = {}
     for row in rows:
         key = (
             str(row["backend"]),
             str(row["model"]),
-            int(row["context"]),
-            int(row["gpu_layers"]),
+            int(str(row["output_tokens"])),
+            int(str(row["context"])),
+            int(str(row["gpu_layers"])),
         )
         grouped.setdefault(key, []).append(row)
     backends = sorted({str(row["backend"]) for row in rows})
     models = sorted({str(row["model"]) for row in rows})
-    contexts = sorted({int(row["context"]) for row in rows})
-    layers = sorted({int(row["gpu_layers"]) for row in rows})
+    output_token_sizes = sorted({int(str(row["output_tokens"])) for row in rows})
+    contexts = sorted({int(str(row["context"])) for row in rows})
+    layers = sorted({int(str(row["gpu_layers"])) for row in rows})
     lines = [
         "# Architecture Benchmark Matrix",
         "",
@@ -436,44 +438,53 @@ def write_matrix_report(
                 row["backend"] == backend and row["model"] == model for row in rows
             ):
                 continue
-            lines.extend([
-                f"## {backend}: {Path(model).stem}",
-                "",
-                "| Context | " + " | ".join(f"-ngl {layer}" for layer in layers) + " |",
-                "| ---: | " + " | ".join("---" for _ in layers) + " |",
-            ])
-            for context in contexts:
-                cells = []
-                for layer in layers:
-                    values = grouped.get((backend, model, context, layer), [])
-                    if not values:
-                        cells.append("N/A")
-                        continue
-                    if len(values) < expected_repeats:
-                        cells.append(f"incomplete ({len(values)}/{expected_repeats})")
-                        continue
-                    passed = [
-                        row
-                        for row in values
-                        if row["status"] == "pass"
-                        and row["generation_tokens_per_second"] is not None
-                    ]
-                    if not passed:
-                        cells.append("fail")
-                        continue
-                    speed = sum(
-                        float(row["generation_tokens_per_second"]) for row in passed
-                    ) / len(passed)
-                    memory_values = [
-                        float(row["peak_vram_mib"])
-                        for row in passed
-                        if row["peak_vram_mib"] is not None
-                    ]
-                    memory = f"; {max(memory_values):.0f} MiB" if memory_values else ""
-                    cells.append(f"pass; {speed:.1f} t/s{memory}")
-                lines.append(f"| {context} | " + " | ".join(cells) + " |")
-            lines.append("")
+            for output_tokens in output_token_sizes:
+                if not any(
+                    row["backend"] == backend
+                    and row["model"] == model
+                    and int(str(row["output_tokens"])) == output_tokens
+                    for row in rows
+                ):
+                    continue
+                lines.extend([
+                    f"## {backend}: {Path(model).stem} — {output_tokens} output tokens",
+                    "",
+                    "| Context | " + " | ".join(f"-ngl {layer}" for layer in layers) + " |",
+                    "| ---: | " + " | ".join("---" for _ in layers) + " |",
+                ])
+                for context in contexts:
+                    cells = []
+                    for layer in layers:
+                        values = grouped.get((backend, model, output_tokens, context, layer), [])
+                        if not values:
+                            cells.append("N/A")
+                            continue
+                        if len(values) < expected_repeats:
+                            cells.append(f"incomplete ({len(values)}/{expected_repeats})")
+                            continue
+                        passed = [
+                            row
+                            for row in values
+                            if row["status"] == "pass"
+                            and row["generation_tokens_per_second"] is not None
+                        ]
+                        if not passed:
+                            cells.append("fail")
+                            continue
+                        speed = sum(
+                            float(str(row["generation_tokens_per_second"])) for row in passed
+                        ) / len(passed)
+                        memory_values = [
+                            float(str(row["peak_vram_mib"]))
+                            for row in passed
+                            if row["peak_vram_mib"] is not None
+                        ]
+                        memory = f"; {max(memory_values):.0f} MiB" if memory_values else ""
+                        cells.append(f"pass; {speed:.1f} t/s{memory}")
+                    lines.append(f"| {context} | " + " | ".join(cells) + " |")
+                lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
+
 
 
 def append_result(path: Path, row: dict[str, object]) -> None:
@@ -507,13 +518,23 @@ def main() -> int:
     args.gpu_layers = args.gpu_layers or architecture_defaults.get(
         "gpu_layers", [1, 5, 10, 15, 20, 30, 99]
     )
-    args.output_tokens = args.output_tokens or int(
-        architecture_defaults.get("output_tokens", 256)
-    )
+    args.output_tokens = args.output_tokens or [
+        int(architecture_defaults.get("output_tokens", 256))
+    ]
     args.repeats = args.repeats or int(architecture_defaults.get("repeats", 2))
     models = configured_models(args)
     configured_contexts = (
-        configuration.get("common_parameters", {}).get("context", {}).get("values", [])
+        configuration.get("common_parameters", {})
+    )
+    configured_contexts = (
+        configured_contexts.get("context", {})
+        if isinstance(configured_contexts, dict)
+        else {}
+    )
+    configured_contexts = (
+        configured_contexts.get("values", [])
+        if isinstance(configured_contexts, dict)
+        else []
     )
     contexts = args.context or [int(value) for value in configured_contexts]
     if not contexts:
@@ -521,7 +542,7 @@ def main() -> int:
     if (
         args.repeats < 1
         or any(context < 1 for context in contexts)
-        or args.output_tokens < 1
+        or any(n < 1 for n in args.output_tokens)
     ):
         raise ValueError("repeats, context, and output-tokens must be positive")
 
@@ -569,6 +590,7 @@ def main() -> int:
         * len(models)
         * len(contexts)
         * len(args.gpu_layers)
+        * len(args.output_tokens)
         * args.repeats
     )
     if args.dry_run:
@@ -580,7 +602,7 @@ def main() -> int:
         print(f"Models: {', '.join(model['id'] for model in models)}")
         print(f"Contexts: {', '.join(map(str, contexts))}")
         print(f"GPU layers: {', '.join(map(str, args.gpu_layers))}")
-        print(f"Output tokens: {args.output_tokens}")
+        print(f"Output tokens: {', '.join(map(str, args.output_tokens))}")
         print(f"Repeats: {args.repeats}")
         print(f"Tests planned: {total_tests}")
         return 0
@@ -591,7 +613,7 @@ def main() -> int:
             f"run_id={run_id}",
             f"models={','.join(model['id'] for model in models)}",
             f"contexts={','.join(map(str, contexts))}",
-            f"output_tokens={args.output_tokens}",
+            f"output_tokens={','.join(map(str, args.output_tokens))}",
             f"repeats={args.repeats}",
             f"gpu_layers={','.join(map(str, args.gpu_layers))}",
             f"runtimes={','.join(runtime_id for runtime_id, *_ in runtimes)}",
@@ -636,106 +658,107 @@ def main() -> int:
             model_name = model_path.stem
             for context in contexts:
                 for layers in args.gpu_layers:
-                    for repeat in range(1, args.repeats + 1):
-                        stem = f"{model_name}-c{context}-ngl{layers}-r{repeat}"
-                        log_path = backend_directory / f"{stem}.log"
-                        arguments = [
-                            "-m",
-                            str(model_path),
-                            "-ngl",
-                            str(layers),
-                            "--device",
-                            ",".join(devices),
-                            "--split-mode",
-                            split_mode,
-                            "--main-gpu",
-                            "0",
-                            "--load-mode",
-                            "mmap",
-                            "-c",
-                            str(context),
-                            "-n",
-                            str(args.output_tokens),
-                            "--temp",
-                            "0",
-                            "--top-p",
-                            "0.95",
-                            "--seed",
-                            "42",
-                            "--reasoning",
-                            "off",
-                            "--reasoning-budget",
-                            "0",
-                            "--single-turn",
-                            "--simple-io",
-                            "--color",
-                            "off",
-                            "-p",
-                            PROMPT,
-                        ]
-                        test_number = completed_tests + 1
-                        print(
-                            f"Test {test_number} of {total_tests}: "
-                            f"{model['id']} {runtime_id} context {context} "
-                            f"-ngl {layers} repeat {repeat} -> started",
-                            flush=True,
-                        )
-                        start = datetime.now(timezone.utc)
-                        (
-                            exit_code,
-                            output,
-                            gpu_name,
-                            peak_utilization,
-                            peak_memory,
-                            memory_stats,
-                        ) = run_command(runtime, arguments, log_path, gpu_indices)
-                        duration = (datetime.now(timezone.utc) - start).total_seconds()
-                        generation = GENERATION_RE.search(output)
-                        prompt_rate = PROMPT_RE.search(output)
-                        generation_rate = (
-                            float(generation.group(1)) if generation else None
-                        )
-                        status = (
-                            "pass"
-                            if exit_code == 0
-                            and generation_rate
-                            and generation_rate > 0
-                            else "fail"
-                        )
-                        rows.append({
-                            "run_id": run_id,
-                            "backend": runtime_id,
-                            "runtime": version,
-                            "gpu_index": ",".join(map(str, gpu_indices)),
-                            "gpu_name": gpu_name,
-                            "model": str(model_path),
-                            "gpu_layers": layers,
-                            "repeat": repeat,
-                            "context": context,
-                            "output_tokens": args.output_tokens,
-                            "status": status,
-                            "exit_code": exit_code,
-                            "duration_seconds": round(duration, 3),
-                            **memory_stats,
-                            "peak_gpu_utilization_percent": peak_utilization,
-                            "peak_vram_mib": peak_memory,
-                            "generation_tokens_per_second": generation_rate,
-                            "prompt_tokens_per_second": (
-                                float(prompt_rate.group(1)) if prompt_rate else None
-                            ),
-                            "log": str(log_path),
-                        })
-                        append_result(results_path, rows[-1])
-                        write_matrix_report(
-                            run_directory / "matrix.md", rows, args.repeats
-                        )
-                        completed_tests += 1
-                        print(
-                            f"Test {completed_tests} of {total_tests}: "
-                            f"{model['id']} {runtime_id} context {context} "
-                            f"-ngl {layers} repeat {repeat} -> {status}",
-                            flush=True,
-                        )
+                    for output_tokens in args.output_tokens:
+                        for repeat in range(1, args.repeats + 1):
+                            stem = f"{model_name}-c{context}-ngl{layers}-n{output_tokens}-r{repeat}"
+                            log_path = backend_directory / f"{stem}.log"
+                            arguments = [
+                                "-m",
+                                str(model_path),
+                                "-ngl",
+                                str(layers),
+                                "--device",
+                                ",".join(devices),
+                                "--split-mode",
+                                split_mode,
+                                "--main-gpu",
+                                "0",
+                                "--load-mode",
+                                "mmap",
+                                "-c",
+                                str(context),
+                                "-n",
+                                str(output_tokens),
+                                "--temp",
+                                "0",
+                                "--top-p",
+                                "0.95",
+                                "--seed",
+                                "42",
+                                "--reasoning",
+                                "off",
+                                "--reasoning-budget",
+                                "0",
+                                "--single-turn",
+                                "--simple-io",
+                                "--color",
+                                "off",
+                                "-p",
+                                PROMPT,
+                            ]
+                            test_number = completed_tests + 1
+                            print(
+                                f"Test {test_number} of {total_tests}: "
+                                f"{model['id']} {runtime_id} context {context} "
+                                f"-ngl {layers} -n {output_tokens} repeat {repeat} -> started",
+                                flush=True,
+                            )
+                            start = datetime.now(timezone.utc)
+                            (
+                                exit_code,
+                                output,
+                                gpu_name,
+                                peak_utilization,
+                                peak_memory,
+                                memory_stats,
+                            ) = run_command(runtime, arguments, log_path, gpu_indices)
+                            duration = (datetime.now(timezone.utc) - start).total_seconds()
+                            generation = GENERATION_RE.search(output)
+                            prompt_rate = PROMPT_RE.search(output)
+                            generation_rate = (
+                                float(generation.group(1)) if generation else None
+                            )
+                            status = (
+                                "pass"
+                                if exit_code == 0
+                                and generation_rate
+                                and generation_rate > 0
+                                else "fail"
+                            )
+                            rows.append({
+                                "run_id": run_id,
+                                "backend": runtime_id,
+                                "runtime": version,
+                                "gpu_index": ",".join(map(str, gpu_indices)),
+                                "gpu_name": gpu_name,
+                                "model": str(model_path),
+                                "gpu_layers": layers,
+                                "repeat": repeat,
+                                "context": context,
+                                "output_tokens": output_tokens,
+                                "status": status,
+                                "exit_code": exit_code,
+                                "duration_seconds": round(duration, 3),
+                                **memory_stats,
+                                "peak_gpu_utilization_percent": peak_utilization,
+                                "peak_vram_mib": peak_memory,
+                                "generation_tokens_per_second": generation_rate,
+                                "prompt_tokens_per_second": (
+                                    float(prompt_rate.group(1)) if prompt_rate else None
+                                ),
+                                "log": str(log_path),
+                            })
+                            append_result(results_path, rows[-1])
+                            write_matrix_report(
+                                run_directory / "matrix.md", rows, args.repeats
+                            )
+                            completed_tests += 1
+                            print(
+                                f"Test {completed_tests} of {total_tests}: "
+                                f"{model['id']} {runtime_id} context {context} "
+                                f"-ngl {layers} -n {output_tokens} repeat {repeat} -> {status}",
+                                flush=True,
+                            )
 
     write_matrix_report(run_directory / "matrix.md", rows, args.repeats)
     print(f"Architecture benchmark complete: {run_directory}")
