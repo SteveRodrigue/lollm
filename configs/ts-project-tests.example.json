@@ -1,0 +1,34 @@
+{
+  "_comment": "Template. Copy to configs/ts-project-tests.local.json (gitignored) and fill in with real TS project paths. Never commit TS project-specific values.",
+  "sizes": [16000, 64000, 120000],
+  "rules_files": ["AGENTS.md", ".agents/rules/*.md"],
+  "padding_exclude": ["docs/*", "*.png", "*.svg"],
+  "setup_command": ["npm", "ci", "--ignore-scripts"],
+  "test_command": ["npm", "test", "--silent"],
+  "target_test_command": null,
+  "failure_chars": 4000,
+  "bug_tasks": [
+    {
+      "id": "bug-1",
+      "description": "A test is failing. Find the cause in the code above and fix it with a minimal change.",
+      "mutation": {"file": "src/REPLACE_ME.js", "find": "EXACT_TEXT_THAT_OCCURS_ONCE", "replace": "BUGGY_TEXT"},
+      "files_hint": ["src/REPLACE_ME.js"]
+    }
+  ],
+  "rule_tasks": [
+    {
+      "id": "rule-1",
+      "instruction": "Describe the change to make here, in a way that has one correct shape under the repository rules.",
+      "files_hint": [],
+      "checks": [
+        {"type": "no_crlf", "files": "*"},
+        {"type": "forbid_regex", "pattern": "FORBIDDEN_PATTERN", "files": ".agents/rules/*"},
+        {"type": "require_regex", "file": ".agents/rules/REPLACE_ME.md", "pattern": "REQUIRED_PHRASE"},
+        {"type": "max_changed_files", "n": 3}
+      ]
+    }
+  ],
+  "recall_questions": [
+    {"id": "q1", "question": "What is the value of MAX_EXAMPLE in src/REPLACE_ME.js?", "answer_from": {"type": "regex_capture", "file": "src/REPLACE_ME.js", "pattern": "MAX_EXAMPLE\s*=\s*(\d+)"}}
+  ]
+}

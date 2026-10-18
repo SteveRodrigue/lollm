@@ -1,0 +1,54 @@
+{
+ "_comment": "Provisional VRAM cost model per Strata model on an 8 GB RTX 3060 Ti (MiB), derived from engine startup messages in this repository's benchmark logs. tools/fit_sweep.py measures the real limits; refine these numbers from its table. kv_mib = base + per_token * window for the KV cache reserved up front (--kv q4_0, no --kv-grow). max_context is the largest window the model/runtime supports (Qwen3.8-Flash-Next native 262144).",
+ "models": {
+  "qwen3.8-flash-next-iq2_xs": {
+   "dense_mib": 4551,
+   "draft_head_mib": {
+    "cjk": 143,
+    "en": 133
+   },
+   "min_expert_cache_mib": 468,
+   "kv_q4_0": {
+    "base_mib": 120,
+    "per_token_mib": 0.00832
+   },
+   "max_context": 262144,
+   "suggested_margin_mib": 127,
+   "fast_dense_mib": 3955,
+   "verified_max_window": 163840
+  },
+  "qwen3.8-flash-next-coder-iq1_m": {
+   "dense_mib": 5005,
+   "draft_head_mib": {
+    "cjk": 218,
+    "en": 218
+   },
+   "min_expert_cache_mib": 634,
+   "kv_q4_0": {
+    "base_mib": 120,
+    "per_token_mib": 0.00832
+   },
+   "max_context": 262144,
+   "suggested_margin_mib": 38,
+   "fast_dense_mib": 4484,
+   "verified_max_window": 131072
+  },
+  "qwen3.8-flash-next-iq3_xxs": {
+   "dense_mib": 4891,
+   "draft_head_mib": {
+    "cjk": 143,
+    "en": 133
+   },
+   "min_expert_cache_mib": 468,
+   "kv_q4_0": {
+    "base_mib": 120,
+    "per_token_mib": 0.00832
+   },
+   "max_context": 262144,
+   "suggested_margin_mib": 100,
+   "fast_dense_mib": 4527,
+   "verified_max_window": 131072
+  }
+ },
+ "_fitted_from": "20261016-1600-nokvgrow-headalias"
+}

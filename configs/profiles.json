@@ -1,0 +1,30 @@
+{
+ "_comment": "The three launch profiles (run-strata-quality.bat, run-strata-big-context.bat, run-strata-fastest.bat). Edit this file to change a profile: model config, extra launcher options, and the evidence it rests on. Review after new models, engine versions or results. \"options\" are launcher options; --opencode update keeps the OpenCode config in line with the served model after each start (a backup is made first); add --start-opencode to open OpenCode too.",
+ "quality": {
+  "config": "configs/strata-iq3_xxs.json",
+  "options": [
+   "--opencode",
+   "update"
+  ],
+  "reviewed": "2026-10-18",
+  "why": "Highest code quality: 29 of 32 coding attempts fully fixed (IQ2_XS 23, Coder 23); the only model that solves bug 2 reliably. Slow (about 43 min per 64K request)."
+ },
+ "big-context": {
+  "config": "configs/strata-iq2_xs.json",
+  "options": [
+   "--opencode",
+   "update"
+  ],
+  "reviewed": "2026-10-18",
+  "why": "Largest window: verified up to 163,840 tokens in fast mode with 7,390 MiB or more available. Code quality equals the Coder's, below IQ3_XXS."
+ },
+ "fastest": {
+  "config": "configs/strata-coder-iq1_m.json",
+  "options": [
+   "--opencode",
+   "update"
+  ],
+  "reviewed": "2026-10-18",
+  "why": "Fastest answers (about 8 min per 64K request, about 5 min per fix in fast mode), same accuracy as IQ2_XS, but a small window (65,536 at best on 8 GB)."
+ }
+}

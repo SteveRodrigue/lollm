@@ -20,3 +20,9 @@ reports/
 
 # Keep directory placeholders if added later
 !.gitkeep
+
+# TS project test spec with real TS project paths (template: configs/ts-project-tests.example.json)
+configs/ts-project-tests*.local.json
+
+# Shared to-do list (kept on disk for reference, not committed)
+TODO.md

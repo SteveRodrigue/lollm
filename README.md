@@ -89,6 +89,10 @@ Each run stores raw output, extracted candidates, validation logs, and ledger ro
 
 Qwen3.5 Q2_K is marked `incompatible-inconsistent` for coding under the installed runtime. Its limited hello profiles remain documented for conversational experiments. Qwen2.5-Coder-7B, Qwen3.5 Q3_K_M, and Qwen3.5 IQ4_XS are the current coding comparison candidates.
 
+## Strata
+
+[docs/strata.md](docs/strata.md) records the Strata setup and benchmarks on Windows 11. A Linux dual-boot plan for running Strata as a local coding model, which is not yet validated, is in [docs/strata-linux-dual-boot.md](docs/strata-linux-dual-boot.md).
+
 ## Protocol
 
 Read [docs/test-protocol.md](docs/test-protocol.md) before adding or comparing tests. See [docs/creating-tests.md](docs/creating-tests.md) when adding a new prompt, checker, or pytest snippet. Existing 1K-output coding results are marked preliminary. Controlled quality runs use separate 8K and 16K output budgets, fixed sampling, explicit reasoning settings, durable ledgers, and per-test summaries.

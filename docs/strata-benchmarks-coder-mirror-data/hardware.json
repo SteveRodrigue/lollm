@@ -1,0 +1,108 @@
+{
+ "os": "Windows 11 (10.0.26300)",
+ "python": "3.14.7",
+ "cpu": {
+  "name": "AMD Ryzen 7 5800X3D 8-Core Processor",
+  "logical": 16,
+  "cores": 8,
+  "max_mhz": 3401,
+  "l3_mib": 96.0
+ },
+ "ram": {
+  "modules": [
+   {
+    "gib": 8,
+    "type": "DDR4",
+    "rated_mts": 3600,
+    "configured_mts": 3600,
+    "ecc": false
+   },
+   {
+    "gib": 8,
+    "type": "DDR4",
+    "rated_mts": 3600,
+    "configured_mts": 3600,
+    "ecc": false
+   },
+   {
+    "gib": 8,
+    "type": "DDR4",
+    "rated_mts": 3600,
+    "configured_mts": 3600,
+    "ecc": false
+   },
+   {
+    "gib": 8,
+    "type": "DDR4",
+    "rated_mts": 3600,
+    "configured_mts": 3600,
+    "ecc": false
+   }
+  ],
+  "total_gib": 31.9,
+  "theoretical_gbs": 57.6,
+  "theoretical_note": "3600 MT/s x 8 B x 2 channels (assumed)"
+ },
+ "ram_bandwidth": {
+  "threads": 8,
+  "buffer_mib_per_thread": 512,
+  "read_gbs": 32.9,
+  "copy_gbs": 37.8
+ },
+ "gpu": {
+  "smi_idle": {
+   "name": "NVIDIA GeForce RTX 3060 Ti",
+   "driver_version": "616.92",
+   "memory.total": "8192",
+   "pcie.link.gen.current": "3",
+   "pcie.link.gen.max": "3",
+   "pcie.link.width.current": "16",
+   "pcie.link.width.max": "16",
+   "clocks.sm": "1935",
+   "clocks.max.sm": "2100",
+   "clocks.mem": "7001",
+   "clocks.max.mem": "7001",
+   "power.limit": "240.00",
+   "power.default_limit": "240.00",
+   "power.max_limit": "325.00",
+   "pstate": "P0",
+   "temperature.gpu": "40"
+  },
+  "bar1_mib": 8192,
+  "bus_width_bits": 256,
+  "sm_count": 38,
+  "l2_mib": 3.0,
+  "vram_d2d_gbs": 401.3,
+  "pcie_h2d_pinned_gbs": 13.04,
+  "pcie_d2h_pinned_gbs": 13.17,
+  "pcie_h2d_pageable_gbs": 9.24,
+  "pcie_d2h_pageable_gbs": 7.87,
+  "smi_under_load": {
+   "name": "NVIDIA GeForce RTX 3060 Ti",
+   "driver_version": "616.92",
+   "memory.total": "8192",
+   "pcie.link.gen.current": "3",
+   "pcie.link.gen.max": "3",
+   "pcie.link.width.current": "16",
+   "pcie.link.width.max": "16",
+   "clocks.sm": "1950",
+   "clocks.max.sm": "2100",
+   "clocks.mem": "6801",
+   "clocks.max.mem": "7001",
+   "power.limit": "240.00",
+   "power.default_limit": "240.00",
+   "power.max_limit": "325.00",
+   "pstate": "P2",
+   "temperature.gpu": "38"
+  }
+ },
+ "power_plan": "Utilisation normale",
+ "storage": {
+  "model": "WD_BLACK SN850X 1000GB",
+  "media": "SSD",
+  "bus": "NVMe",
+  "size_gib": 932,
+  "free_gib": 532,
+  "seq_read_gbs_unbuffered": 3.37
+ }
+}
